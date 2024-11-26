@@ -166,6 +166,10 @@ their identity - either their public key, its hash or some other representation.
 This Trust Anchor List SHOULD be stored in a secure, tamper-proof location
 on the device to prevent any loss of integrity.
 
+This Trust Anchor List will be pre-configured during the first installation in
+the vehicle, and may be updated during the vehicle's life. The method to update
+the TAL is described in a section below.
+
 ### Full Verification
 
 The full verification workflow will largely be the [same as in the current 
@@ -205,16 +209,93 @@ Uptane Standard from points 5 through 12 inclusive.
 The partial verification workflow will be the same as outlined in the current 
 standard. 
 
-### Updating the Certificate Trust List on full verification-capable ECUs
+### Updating the Trust Anchor List on full verification-capable ECUs
 
-Updates to this Certificate Trust List can be issued through an Uptane-compliant
-system. 
+Updates to the Trust Anchor List on ECUs capable of performing full verification
+could be one of two types:
+* Change in keys
+* Change in Trust Anchor
+
+The first type has a higher likelihood of occurring, especially as Uptane encourages
+key rotation for the root of trust and Targets role. 
+The second type may be triggered by a number of situations, but is less likely
+to occur as compared to the first one. This is simply because of the complexity
+involved in changing the Trust Anchor. 
+
+#### Change in keys
+
+**Robust key rotation** is a critical aspect of the security provided by TUF and
+Uptane. Key rotation is particularly important in cases where a key on the root
+of trust (Trust Anchor) has been compromised. The [TUF Standard](https://theupdateframework.github.io/specification/latest/index.html#key-management-and-migration)
+outlines a method for securely migrating to a new set of trusted root keys.  
+
+For compatibility with PKI-like systems, key updates may be managed
+through [Certificate Revocation Lists](https://csrc.nist.gov/glossary/term/certificate_revocation_list)
+(CRLs). This approach can be implemented via the Online Certificate Status
+Protocol (OCSP). An OCSP server may rely on CRLs or other mechanisms to
+determine a certificate's status.  
+
+Regardless of the implementation, any ECU capable of performing full verification
+SHOULD consult a CRL before validating the Trust Anchor’s identity. If the
+certificate in the ECU’s Trust Anchor List (TAL) is found to be invalid,
+this typically indicates that the Trust Anchor keys have been rotated. In such
+cases, the ECU SHOULD take appropriate steps to retrieve the updated
+certificate from the Director.  
+
+The specifics of this workflow are left to the discretion of implementers of
+this document.
+
+#### Change in Trust Anchor
+
+In the situation where the OEM decides to change the Trust Anchor, this information
+must be conveyed to all target vehicles in order for the update process to work
+seamlessly.
+
+The Trust Anchor change will be one of two cases: the new Trust Anchor exists in the
+onboard Trust Anchor List, and the new Trust Anchor does not exist in the
+onboard Trust Anchor List.
+
+When new Trust Anchor exists in the onboard Trust Anchor List the following
+process must be followed:
+* As part of the regular Uptane-compliant software update workflow, a document
+stating the plan to change the Trust Anchor must be directed to be processed
+by the Primary ECU - the flow remains the same, with the Primary verifying the
+root of trust with the current Trust Anchor. 
+* During the next software update cycle, while verifying the identity of the
+Trust Anchor as part of verifying the certificate chain of trust, (Step 3 in
+full verification), the Primary SHALL verify the identity of the new Trust Anchor
+through the document received in the previous update cycle.
+  * If the identities do not match, the Primary SHALL drop the received contents
+    (if any), notify the Director and terminate the connection.
+  * If the identities match, the Primary will continue with the rest of the full
+  verification workflow.
+
+When new Trust Anchor does not exist in the onboard Trust Anchor List the
+following process must be followed:
+* The OEM SHALL notify the Director about the intent to introduce a new Trust
+Anchor.
+* The Director will consult a central repository of verified and known trust
+anchors, which is updated upon addition of new trust anchors, such as
+Certificate Transparency to update its Trust Anchor List. 
+* As part of a regular Uptane-compliant software update workflow, the Director
+will generate a document stating the plan to add a new Trust Anchor. This document
+is meant for and will be processed by the Primary ECU.
+* Once this document is verified and processed by the Primary, it must contact
+the Director, with a confirmation for updating its Trust Anchor List,
+whenever ready.
+* The Director will issue another update to this Primary, with the updated
+Trust Anchor List. 
+* The Primary SHALL perform full verification upon receiving the updated
+Trust Anchor List.
+
+This should follow a similar flow as described above, since the core of the change
+is the same - the identity of the root certificate is changing.
 
 ## Security Analysis
 
 No changes are made to the Targets metadata, which protects important information
 regarding the update package, and protects against the four attacks: Freeze, 
-Rollback, Arbitrary Software and Mix-and-Match attacks. Thus they remain protected
+Rollback, Arbitrary Software and Mix-and-Match attacks. Thus, they remain protected
 to the same degree.
 
 Since the Root role protects against spoofing attacks, we may analyze it:
@@ -226,10 +307,24 @@ that it is interacting with a legitimate OEM Director.
 
 _Mitigation_: Verify identity and level of access for Director by verifying
 Targets certificate, the access field in said certificate and the chain of trust
-all the way to the Trust Anchor with the on-board Certificate Trust List.
+all the way to the Trust Anchor with the on-board Trust Anchor List.
 
 All other types of attacks protected by other security features remain protected
 with this architectural change.
+
+#### Updating the onboard Trust Anchor List
+
+The TAL is the method by which a Primary knows whether to trust a Trust Anchor
+or not. Securing updates to the TAL is of paramount importance.
+
+The method outlined above for updating the TAL uses a combination of Uptane's
+secure update system and existing secure methods used in PKI to update TALs.
+This protects the system from all attacks included in PKI and Uptane's threat
+model, including some very nuanced DoS attacks (such as the ones described in
+Uptane).
+
+The specified method even protects against endless data attacks, by allowing
+the Primary ECU to decide when to receive the updated TAL from the Director.
 
 ## Backwards Compatibility
 
