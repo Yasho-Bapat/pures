@@ -145,15 +145,6 @@ Roles and their associated metadata from the Uptane Standard.
 Their functions can be served by the single Targets Role and Metadata, provided the 
 Targets metadata has all the above fields.
 
-### Changes on the vehicle
-
-All Primary ECUs and Secondary ECUs capable of performing full verification MUST have a
-list of trusted/known Trust Anchors, and a way to identify them - either their public key,
-their hash or some other representation, to verify the root of trust in the system.
-
-This list of known trust anchors SHOULD be stored in a secure, tamper-proof location 
-on the device to prevent any loss of integrity.
-
 ### Full verification
 
 The full verification workflow will largely be the [same as in the current 
