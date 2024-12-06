@@ -224,26 +224,27 @@ involved in changing the Trust Anchor.
 
 #### Change in keys
 
-**Robust key rotation** is a critical aspect of the security provided by TUF and
+Robust key rotation is a critical aspect of the security provided by TUF and
 Uptane. Key rotation is particularly important in cases where a key on the root
-of trust (Trust Anchor) has been compromised. The [TUF Standard](https://theupdateframework.github.io/specification/latest/index.html#key-management-and-migration)
-outlines a method for securely migrating to a new set of trusted root keys.  
+of trust (Trust Anchor) has been compromised. The TUF Standard outlines a
+method for securely migrating to a new set of trusted root keys.
+If, while executing step 3 in full verification from PURE-4, the certificate in
+the ECU’s Trust Anchor List (TAL) is found to be invalid, it could indicate that
+the Trust Anchor keys have been rotated. In such cases, the ECU SHOULD take
+appropriate steps to retrieve the updated certificate from the Director:
 
-For compatibility with PKI-like systems, key updates may be managed
-through [Certificate Revocation Lists](https://csrc.nist.gov/glossary/term/certificate_revocation_list)
-(CRLs). This approach can be implemented via the Online Certificate Status
-Protocol (OCSP). An OCSP server may rely on CRLs or other mechanisms to
-determine a certificate's status.  
-
-Regardless of the implementation, any ECU capable of performing full verification
-SHOULD consult a CRL before validating the Trust Anchor’s identity. If the
-certificate in the ECU’s Trust Anchor List (TAL) is found to be invalid,
-this typically indicates that the Trust Anchor keys have been rotated. In such
-cases, the ECU SHOULD take appropriate steps to retrieve the updated
-certificate from the Director.  
-
-The specifics of this workflow are left to the discretion of implementers of
-this document.
+* The new certificate must be published to some central repository, such as
+Certificate Transparency Log. 
+* In the event of a certificate being determined as invalid, the Primary must
+alert the Director about the invalid certificate. 
+* The Director will consult a central repository of verified and known trust
+anchors, which is updated upon addition of new trust anchors and update its own
+Trust Anchor List. 
+* The Director will then respond to the Primary with a delta update, for adding
+the new certificate in its Trust Anchor List. The Director must generate
+appropriate Targets metadata before shipping this update. 
+* The Primary will verify the metadata for the delta update, update its TAL and
+proceed with full verification step 3 onwards.
 
 #### Change in Trust Anchor
 
@@ -260,11 +261,12 @@ process must be followed:
 * As part of the regular Uptane-compliant software update workflow, a document
 stating the plan to change the Trust Anchor must be directed to be processed
 by the Primary ECU - the flow remains the same, with the Primary verifying the
-root of trust with the current Trust Anchor. 
+root of trust with the current Trust Anchor. This document may contain
+information about the new TA, such as its name, public key, etc. 
 * During the next software update cycle, while verifying the identity of the
 Trust Anchor as part of verifying the certificate chain of trust, (Step 3 in
 full verification), the Primary SHALL verify the identity of the new Trust Anchor
-through the document received in the previous update cycle.
+through the document received in the previous update cycle and its own TAL.
   * If the identities do not match, the Primary SHALL drop the received contents
     (if any), notify the Director and terminate the connection.
   * If the identities match, the Primary will continue with the rest of the full
@@ -286,10 +288,12 @@ whenever ready.
 * The Director will issue another update to this Primary, with the updated
 Trust Anchor List. 
 * The Primary SHALL perform full verification upon receiving the updated
-Trust Anchor List.
+Trust Anchor List. Upon successful verification, it will update its own TAL and
+send a success code to the Director through the Vehicle Version Manifest the next
+time it is sent.
+* The Director will then derive the root of trust from the new Trust Anchor.
 
-This should follow a similar flow as described above, since the core of the change
-is the same - the identity of the root certificate is changing.
+The details of the implementation of the above flow is left to the OEM.
 
 ## Security Analysis
 
